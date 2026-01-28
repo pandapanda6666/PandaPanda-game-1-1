@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 迷宮挑戰賽 - 角色自定義版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #0f172a;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            cursor: grab;
+        }
+        canvas:active {
+            cursor: grabbing;
+        }
+        .ui-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            pointer-events: none;
+            max-height: 90vh;
+            overflow-y: auto;
+            scrollbar-width: none;
+        }
+        .ui-overlay::-webkit-scrollbar { display: none; }
+        .ui-overlay > * {
+            pointer-events: auto;
+        }
+        .control-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(12px);
+            padding: 1.25rem;
+            border-radius: 16px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.4);
+            width: 340px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .select-input {
+            @apply w-full border-2 border-slate-200 rounded-lg px-2 py-1 text-sm outline-none focus:border-blue-500 bg-white;
+        }
+    </style>
+</head>
+<body class="w-screen h-screen">
+
+    <div class="ui-overlay flex flex-col gap-4">
+        <div class="control-panel flex flex-col gap-3">
+            <h1 class="text-2xl font-black text-slate-800">AI 迷宮挑戰</h1>
+            
+            <!-- 迷宮設置 -->
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="text-[10px] font-bold text-slate-400 uppercase">寬度</label>
+                    <input type="number" id="mazeW" value="31" class="select-input">
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold text-slate-400 uppercase">高度</label>
+                    <input type="number" id="mazeH" value="31" class="select-input">
+                </div>
+            </div>
+
+            <!-- 角色外觀設置 -->
+            <div class="border-t border-slate-100 pt-2 flex flex-col gap-2">
+                <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest">角色外觀設置</h2>
+                
+                <div>
+                    <label class="text-[10px] font-bold text-slate-400 uppercase">類型</label>
+                    <select id="charType" class="select-input">
+                        <option value="image">圖片模式</option>
+                        <option value="shape">形狀模式</option>
+                    </select>
+                </div>
+
+                <!-- 形狀選項 -->
+                <div id="shapeSettings" class="hidden flex flex-col gap-2">
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase">形狀</label>
+                            <select id="shapeKind" class="select-input">
+                                <option value="circle">球體 (圓形)</option>
+                                <option value="square">方塊</option>
+                                <option value="triangle">三角形</option>
+                                <option value="polygon">五邊形</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase">顏色</label>
+                            <input type="color" id="shapeColor" value="#6366f1" class="w-full h-8 rounded border-2 border-slate-200 cursor-pointer">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 圖片選項 -->
+                <div id="imageSettings" class="flex flex-col gap-2">
+                    <label class="text-[10px] font-bold text-slate-400 uppercase">選擇角色</label>
+                    <div class="flex gap-2">
+                        <button class="img-pick-btn border-2 border-blue-500 rounded-lg p-1 bg-blue-50" data-url="https://lh3.googleusercontent.com/a/ACg8ocIACThLQv2z6bs3wAc0ecYIEd-4zdOb0IbkOZV-ZVyRKsblTmw=s288-c-no">
+                            <img src="https://lh3.googleusercontent.com/a/ACg8ocIACThLQv2z6bs3wAc0ecYIEd-4zdOb0IbkOZV-ZVyRKsblTmw=s288-c-no" class="w-10 h-10 rounded-md">
+                        </button>
+                        <!-- 卡皮巴拉圖片修正為 icon.png -->
+                        <button class="img-pick-btn border-2 border-transparent rounded-lg p-1 hover:bg-slate-100" data-url="icon.png">
+                            <img src="icon.png" class="w-10 h-10 rounded-md" alt="Capybara" onerror="this.src='https://img.icons8.com/color/512/capybara.png'">
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between py-2 border-t border-slate-100 mt-1">
+                <span class="text-sm font-bold text-slate-700">AI 自動避險</span>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="aiToggle" class="sr-only peer">
+                    <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                </label>
+            </div>
+
+            <div class="flex flex-col gap-2">
+                <button id="resetBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-indigo-200">
+                    套用並開始
+                </button>
+                <button id="retrackBtn" class="bg-emerald-500 hover:bg-emerald-600 text-white py-2 rounded-xl font-bold transition-all hidden">
+                    回復追蹤玩家
+                </button>
+            </div>
+        </div>
+
+        <div id="statusMessage" class="px-6 py-3 rounded-2xl font-black text-center bg-white shadow-2xl opacity-0 transition-all scale-90"></div>
+    </div>
+
+    <canvas id="mazeCanvas"></canvas>
+
+    <footer class="fixed bottom-4 w-full text-center text-slate-400 text-xs pointer-events-none">
+        <div class="pointer-events-auto bg-slate-900/60 inline-block px-4 py-1.5 rounded-full backdrop-blur-md border border-slate-700">
+            版權所有 © 2026 <a href="https://pandapanda6666.github.io" class="text-blue-400 hover:underline">PandaPanda的AI日常</a> All Rights Reserved.
+        </div>
+    </footer>
+
+    <script>
+        const canvas = document.getElementById('mazeCanvas');
+        const ctx = canvas.getContext('2d');
+        const mazeBuffer = document.createElement('canvas');
+        const bCtx = mazeBuffer.getContext('2d');
+
+        // UI 元素
+        const inputW = document.getElementById('mazeW');
+        const inputH = document.getElementById('mazeH');
+        const charTypeSelect = document.getElementById('charType');
+        const shapeSettings = document.getElementById('shapeSettings');
+        const imageSettings = document.getElementById('imageSettings');
+        const shapeKindSelect = document.getElementById('shapeKind');
+        const shapeColorInput = document.getElementById('shapeColor');
+        const resetBtn = document.getElementById('resetBtn');
+        const retrackBtn = document.getElementById('retrackBtn');
+        const aiToggle = document.getElementById('aiToggle');
+        const statusMsg = document.getElementById('statusMessage');
+        const imgBtns = document.querySelectorAll('.img-pick-btn');
+
+        // 角色外觀狀態
+        let currentSkin = {
+            type: 'image', // 'image' or 'shape'
+            shape: 'circle',
+            color: '#6366f1',
+            imgUrl: 'https://lh3.googleusercontent.com/a/ACg8ocIACThLQv2z6bs3wAc0ecYIEd-4zdOb0IbkOZV-ZVyRKsblTmw=s288-c-no'
+        };
+
+        const playerImg = new Image();
+        let isImgLoaded = false;
+        playerImg.onload = () => { isImgLoaded = true; };
+        playerImg.onerror = () => { isImgLoaded = false; };
+
+        // 更新 UI 切換
+        charTypeSelect.addEventListener('change', (e) => {
+            currentSkin.type = e.target.value;
+            if (currentSkin.type === 'shape') {
+                shapeSettings.classList.remove('hidden');
+                imageSettings.classList.add('hidden');
+            } else {
+                shapeSettings.classList.add('hidden');
+                imageSettings.classList.remove('hidden');
+            }
+        });
+
+        imgBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                imgBtns.forEach(b => b.classList.remove('border-blue-500', 'bg-blue-50'));
+                btn.classList.add('border-blue-500', 'bg-blue-50');
+                currentSkin.imgUrl = btn.getAttribute('data-url');
+                isImgLoaded = false;
+                playerImg.src = currentSkin.imgUrl;
+            });
+        });
+
+        // 遊戲核心數據
+        let grid = [];
+        let rows, cols;
+        const cellSize = 40;
+        let isGameOver = false;
+        let lastTime = 0;
+
+        class Entity {
+            constructor(x, y, speed) {
+                this.gridX = x;
+                this.gridY = y;
+                this.realX = x * cellSize;
+                this.realY = y * cellSize;
+                this.speed = speed; 
+                this.targetX = x;
+                this.targetY = y;
+            }
+
+            update(dt) {
+                const targetPixelX = this.targetX * cellSize;
+                const targetPixelY = this.targetY * cellSize;
+                const dx = targetPixelX - this.realX;
+                const dy = targetPixelY - this.realY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > 1) {
+                    const step = this.speed * cellSize * dt;
+                    this.realX += (dx / dist) * Math.min(step, dist);
+                    this.realY += (dy / dist) * Math.min(step, dist);
+                    return false; 
+                } else {
+                    this.realX = targetPixelX;
+                    this.realY = targetPixelY;
+                    this.gridX = this.targetX;
+                    this.gridY = this.targetY;
+                    return true; 
+                }
+            }
+        }
+
+        let player, goal, enemies = [];
+        let camera = { x: 0, y: 0, zoom: 1, isFollowing: true };
+        let isDragging = false;
+        let lastMousePos = { x: 0, y: 0 };
+
+        const WALL = 1, PATH = 0;
+
+        function initGame() {
+            isGameOver = false;
+            statusMsg.style.opacity = "0";
+            statusMsg.classList.remove('scale-100');
+            statusMsg.classList.add('scale-90');
+            retrackBtn.classList.add('hidden');
+            
+            // 套用自定義外觀
+            currentSkin.shape = shapeKindSelect.value;
+            currentSkin.color = shapeColorInput.value;
+            isImgLoaded = false;
+            if (currentSkin.type === 'image') {
+                playerImg.src = currentSkin.imgUrl;
+            }
+
+            cols = Math.max(5, parseInt(inputW.value) || 21);
+            rows = Math.max(5, parseInt(inputH.value) || 21);
+            if (cols % 2 === 0) cols++;
+            if (rows % 2 === 0) rows++;
+            
+            generateMazeIterative();
+            addExtraPaths();
+            
+            player = new Entity(1, 1, 6); 
+            goal = { x: cols - 2, y: rows - 2 };
+            
+            enemies = [];
+            const eCount = 8;
+            let attempts = 0;
+            while (enemies.length < eCount && attempts < 2000) {
+                let rx = Math.floor(Math.random() * cols);
+                let ry = Math.floor(Math.random() * rows);
+                if (grid[ry][rx] === PATH && (Math.abs(rx-1)+Math.abs(ry-1) > 12)) {
+                    enemies.push(new Entity(rx, ry, 3.5)); 
+                }
+                attempts++;
+            }
+            
+            camera.isFollowing = true;
+            camera.zoom = 1;
+            camera.x = player.realX + cellSize/2;
+            camera.y = player.realY + cellSize/2;
+            
+            renderMazeToBuffer();
+            resizeCanvas();
+            requestAnimationFrame(mainLoop);
+        }
+
+        function generateMazeIterative() {
+            grid = Array(rows).fill().map(() => Array(cols).fill(WALL));
+            let stack = [{x:1, y:1}];
+            grid[1][1] = PATH;
+            while (stack.length > 0) {
+                let curr = stack[stack.length - 1];
+                let neighbors = [];
+                [[0,-2],[0,2],[-2,0],[2,0]].forEach(([dx, dy]) => {
+                    let nx = curr.x+dx, ny = curr.y+dy;
+                    if (nx>0 && nx<cols-1 && ny>0 && ny<rows-1 && grid[ny][nx] === WALL) {
+                        neighbors.push({x:nx, y:ny, mx:curr.x+dx/2, my:curr.y+dy/2});
+                    }
+                });
+                if (neighbors.length > 0) {
+                    let next = neighbors[Math.floor(Math.random()*neighbors.length)];
+                    grid[next.my][next.mx] = PATH;
+                    grid[next.y][next.x] = PATH;
+                    stack.push(next);
+                } else stack.pop();
+            }
+        }
+
+        function addExtraPaths() {
+            for (let i = 0; i < (rows * cols) * 0.1; i++) {
+                let rx = Math.floor(Math.random()*(cols-2))+1;
+                let ry = Math.floor(Math.random()*(rows-2))+1;
+                grid[ry][rx] = PATH;
+            }
+        }
+
+        function renderMazeToBuffer() {
+            mazeBuffer.width = cols * cellSize;
+            mazeBuffer.height = rows * cellSize;
+            bCtx.fillStyle = "#1e293b";
+            bCtx.fillRect(0, 0, mazeBuffer.width, mazeBuffer.height);
+            bCtx.fillStyle = "#f8fafc";
+            for (let y = 0; y < rows; y++) {
+                for (let x = 0; x < cols; x++) {
+                    if (grid[y][x] === PATH) bCtx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+                }
+            }
+        }
+
+        function findPath(start, end, avoidEnemies = false) {
+            const openSet = [{ x: start.x, y: start.y, g: 0, f: 0, parent: null }];
+            const closedSet = new Set();
+            const heuristic = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+            while (openSet.length > 0) {
+                openSet.sort((a, b) => a.f - b.f);
+                const curr = openSet.shift();
+                if (curr.x === end.x && curr.y === end.y) {
+                    let res = [], t = curr;
+                    while (t) { res.push({x:t.x, y:t.y}); t = t.parent; }
+                    return res.reverse();
+                }
+                closedSet.add(`${curr.x},${curr.y}`);
+                [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx, dy]) => {
+                    let nx = curr.x + dx, ny = curr.y + dy;
+                    if (nx<0 || nx>=cols || ny<0 || ny>=rows || grid[ny][nx] === WALL || closedSet.has(`${nx},${ny}`)) return;
+                    if (avoidEnemies) {
+                        const isThreat = enemies.some(e => Math.abs(e.gridX - nx) + Math.abs(e.gridY - ny) <= 1);
+                        if (isThreat) return;
+                    }
+                    let g = curr.g + 1;
+                    let existing = openSet.find(o => o.x === nx && o.y === ny);
+                    if (!existing) openSet.push({ x: nx, y: ny, g: g, f: g + heuristic({x:nx, y:ny}, end), parent: curr });
+                    else if (g < existing.g) { existing.g = g; existing.f = g + heuristic({x:nx, y:ny}, end); existing.parent = curr; }
+                });
+            }
+            return null;
+        }
+
+        function mainLoop(timestamp) {
+            if (isGameOver) { draw(); return; }
+            const dt = Math.min(0.1, (timestamp - lastTime) / 1000);
+            lastTime = timestamp;
+            if (aiToggle.checked && player.gridX === player.targetX && player.gridY === player.targetY) {
+                const p = findPath({x: player.gridX, y: player.gridY}, goal, true);
+                if (p && p.length > 1) { player.targetX = p[1].x; player.targetY = p[1].y; }
+            }
+            player.update(dt);
+            if (player.gridX === goal.x && player.gridY === goal.y) gameOver("任務完成！逃出生天！", "text-emerald-600");
+            enemies.forEach(e => {
+                if (e.update(dt)) { 
+                    const dist = Math.abs(e.gridX - player.gridX) + Math.abs(e.gridY - player.gridY);
+                    if (dist < 15) {
+                        const p = findPath({x: e.gridX, y: e.gridY}, {x: player.gridX, y: player.gridY});
+                        if (p && p.length > 1) { e.targetX = p[1].x; e.targetY = p[1].y; }
+                    } else {
+                        const dirs = [[0,1],[0,-1],[1,0],[-1,0]].sort(()=>Math.random()-0.5);
+                        for(let [dx,dy] of dirs) {
+                            if(grid[e.gridY+dy]?.[e.gridX+dx] === PATH) { e.targetX = e.gridX+dx; e.targetY = e.gridY+dy; break; }
+                        }
+                    }
+                }
+                const dP = Math.sqrt(Math.pow(e.realX - player.realX, 2) + Math.pow(e.realY - player.realY, 2));
+                if (dP < cellSize * 0.6) gameOver("失敗：你被敵人捕獲了！", "text-red-600");
+            });
+            draw();
+            requestAnimationFrame(mainLoop);
+        }
+
+        function drawPlayer(x, y, radius) {
+            if (currentSkin.type === 'image') {
+                if (isImgLoaded) {
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(x, y, radius, 0, Math.PI * 2);
+                    ctx.clip();
+                    ctx.drawImage(playerImg, x - radius, y - radius, radius * 2, radius * 2);
+                    ctx.restore();
+                    ctx.strokeStyle = "white";
+                    ctx.lineWidth = 3;
+                    ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.stroke();
+                } else {
+                    // 備用形狀
+                    ctx.fillStyle = "#6366f1";
+                    ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
+                }
+            } else {
+                ctx.fillStyle = currentSkin.color;
+                ctx.strokeStyle = "white";
+                ctx.lineWidth = 3;
+                const r = radius;
+                ctx.beginPath();
+                switch (currentSkin.shape) {
+                    case 'circle':
+                        ctx.arc(x, y, r, 0, Math.PI * 2);
+                        break;
+                    case 'square':
+                        ctx.rect(x - r, y - r, r * 2, r * 2);
+                        break;
+                    case 'triangle':
+                        ctx.moveTo(x, y - r);
+                        ctx.lineTo(x + r, y + r);
+                        ctx.lineTo(x - r, y + r);
+                        ctx.closePath();
+                        break;
+                    case 'polygon':
+                        const sides = 5;
+                        for (let i = 0; i < sides; i++) {
+                            const ang = (i * 2 * Math.PI) / sides - Math.PI / 2;
+                            const px = x + r * Math.cos(ang);
+                            const py = y + r * Math.sin(ang);
+                            if (i === 0) ctx.moveTo(px, py);
+                            else ctx.lineTo(px, py);
+                        }
+                        ctx.closePath();
+                        break;
+                }
+                ctx.fill();
+                ctx.stroke();
+            }
+        }
+
+        function draw() {
+            if (camera.isFollowing && !isGameOver) {
+                camera.x += (player.realX + cellSize/2 - camera.x) * 0.1;
+                camera.y += (player.realY + cellSize/2 - camera.y) * 0.1;
+            }
+            ctx.fillStyle = "#0f172a";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.scale(camera.zoom, camera.zoom);
+            ctx.translate(-camera.x, -camera.y);
+            ctx.drawImage(mazeBuffer, 0, 0);
+            
+            // 終點
+            ctx.shadowBlur = 15; ctx.shadowColor = "#10b981";
+            ctx.fillStyle = "#10b981";
+            ctx.beginPath(); ctx.arc((goal.x+0.5)*cellSize, (goal.y+0.5)*cellSize, cellSize*0.4, 0, Math.PI*2); ctx.fill();
+            ctx.shadowBlur = 0;
+
+            // 敵人
+            enemies.forEach(e => {
+                ctx.fillStyle = "#ef4444";
+                ctx.beginPath(); ctx.arc(e.realX + cellSize/2, e.realY + cellSize/2, cellSize*0.35, 0, Math.PI*2); ctx.fill();
+                ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 2; ctx.stroke();
+            });
+
+            // 玩家
+            drawPlayer(player.realX + cellSize/2, player.realY + cellSize/2, cellSize*0.4);
+
+            ctx.restore();
+        }
+
+        function gameOver(msg, cls) {
+            if (isGameOver) return;
+            isGameOver = true;
+            statusMsg.textContent = msg;
+            statusMsg.className = `px-6 py-3 rounded-2xl font-black text-center bg-white shadow-2xl transition-all scale-100 ${cls}`;
+            statusMsg.style.opacity = "1";
+        }
+
+        function moveManual(dx, dy) {
+            if (isGameOver || aiToggle.checked) return;
+            if (player.gridX === player.targetX && player.gridY === player.targetY) {
+                let nx = player.gridX + dx, ny = player.gridY + dy;
+                if (grid[ny]?.[nx] === PATH) { player.targetX = nx; player.targetY = ny; }
+            }
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowUp') moveManual(0,-1);
+            if (e.key === 'ArrowDown') moveManual(0,1);
+            if (e.key === 'ArrowLeft') moveManual(-1,0);
+            if (e.key === 'ArrowRight') moveManual(1,0);
+            if (e.key.startsWith('Arrow')) e.preventDefault();
+        });
+
+        canvas.addEventListener('mousedown', e => { isDragging = true; lastMousePos = {x:e.clientX, y:e.clientY}; camera.isFollowing = false; retrackBtn.classList.remove('hidden'); });
+        window.addEventListener('mousemove', e => { if (isDragging) { camera.x -= (e.clientX - lastMousePos.x)/camera.zoom; camera.y -= (e.clientY - lastMousePos.y)/camera.zoom; lastMousePos = {x:e.clientX, y:e.clientY}; }});
+        window.addEventListener('mouseup', () => isDragging = false);
+        canvas.addEventListener('wheel', e => { e.preventDefault(); camera.zoom = Math.min(5, Math.max(0.2, camera.zoom * (e.deltaY > 0 ? 0.9 : 1.1))); }, {passive:false});
+        retrackBtn.addEventListener('click', () => { camera.isFollowing = true; retrackBtn.classList.add('hidden'); });
+        resetBtn.addEventListener('click', initGame);
+        function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+        window.addEventListener('resize', resizeCanvas);
+
+        initGame();
+    </script>
+</body>
+</html>
